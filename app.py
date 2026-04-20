@@ -2,7 +2,6 @@ import streamlit as st
 import numpy as np
 import cv2
 from PIL import Image
-import matplotlib.pyplot as plt
 import uuid
 import json, os, hashlib
 
@@ -93,16 +92,37 @@ class Detector:
     def analyze(self, img):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
+        # features
         texture = cv2.Laplacian(gray, cv2.CV_64F).var()
         noise = np.std(gray)
         edges = np.mean(cv2.Canny(gray,100,200))
 
-        score = min(1, (texture*0.4 + noise*0.3 + edges*0.3)/8000)
-        score = int(score*100)
+        # base score
+        score = (texture*0.4 + noise*0.3 + edges*0.3)/8000
 
-        if score >= 75:
+        # normalize
+        score = max(0, min(score, 1))
+        score = int(score * 100)
+
+        # 🔥 FIX 1: smoothing
+        score = int(0.7 * score + 0.3 * 60)
+
+        # 🔥 FIX 2: face boost
+        face = cv2.CascadeClassifier(
+            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        )
+        faces = face.detectMultiScale(gray, 1.3, 5)
+
+        if len(faces) > 0:
+            score += 10
+
+        # 🔥 FIX 3: clamp
+        score = max(0, min(score, 100))
+
+        # 🔥 FIX 4: better thresholds
+        if score >= 80:
             verdict = "Likely Real ✅"
-        elif score >= 50:
+        elif score >= 60:
             verdict = "Uncertain ⚠️"
         else:
             verdict = "Likely Fake 🚨"
@@ -151,6 +171,7 @@ if mode == "Upload":
             st.progress(score/100)
             st.subheader(f"{verdict} ({score})")
 
+            # heatmap
             heat, overlay = gradcam_like(img)
 
             st.markdown("### 🔥 AI Heatmap")
@@ -158,8 +179,9 @@ if mode == "Upload":
             col1.image(heat)
             col2.image(overlay)
 
+            # explanation
             with st.expander("🧠 Explanation"):
-                st.write("Analyzing texture, edges, and noise patterns.")
+                st.write("Analyzing texture, noise, and gradient inconsistencies.")
 
             st.code(f"Verification ID: {str(uuid.uuid4())[:8]}")
 
@@ -186,7 +208,7 @@ elif mode == "Compare":
             col2.subheader(f"{v2} ({s2})")
 
             if abs(s1-s2)<10:
-                st.warning("Both similar")
+                st.warning("Both images similar")
             elif s1>s2:
                 st.success("Image 1 more authentic")
             else:
@@ -208,3 +230,7 @@ elif mode == "Dashboard":
         fake = sum(1 for x in data if x<40)
 
         st.bar_chart({"Real":real,"Fake":fake})
+
+# ─── FOOTER ───
+st.markdown("---")
+st.caption("🚀 DeepTrust AI | Final Hackathon Build")
