@@ -85,44 +85,47 @@ with st.sidebar:
         st.rerun()
 
 st.title("🛡️ DeepTrust AI")
-st.caption("Final Boss Deepfake Detection System")
+st.caption("Final Hackathon Build")
 
 # ─── DETECTOR ───
 class Detector:
     def analyze(self, img):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # features
+        # Features
         texture = cv2.Laplacian(gray, cv2.CV_64F).var()
         noise = np.std(gray)
         edges = np.mean(cv2.Canny(gray,100,200))
 
-        # base score
-        score = (texture*0.4 + noise*0.3 + edges*0.3)/8000
+        # ✅ Proper normalization (FIXED)
+        texture_score = min(texture / 150, 1)
+        noise_score = min(noise / 70, 1)
+        edge_score = min(edges / 100, 1)
 
-        # normalize
-        score = max(0, min(score, 1))
+        score = (texture_score * 0.4 +
+                 noise_score * 0.3 +
+                 edge_score * 0.3)
+
         score = int(score * 100)
 
-        # 🔥 FIX 1: smoothing
-        score = int(0.7 * score + 0.3 * 60)
-
-        # 🔥 FIX 2: face boost
+        # Face detection
         face = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         )
         faces = face.detectMultiScale(gray, 1.3, 5)
 
-        if len(faces) > 0:
-            score += 10
+        # ✅ Smart correction
+        if len(faces) == 0:
+            score = 75
+        else:
+            score += 5
 
-        # 🔥 FIX 3: clamp
         score = max(0, min(score, 100))
 
-        # 🔥 FIX 4: better thresholds
-        if score >= 80:
+        # ✅ Better thresholds
+        if score >= 70:
             verdict = "Likely Real ✅"
-        elif score >= 60:
+        elif score >= 50:
             verdict = "Uncertain ⚠️"
         else:
             verdict = "Likely Fake 🚨"
@@ -167,21 +170,17 @@ if mode == "Upload":
 
             st.session_state.history.append(score)
 
-            st.markdown("### 🔥 Trust Score")
             st.progress(score/100)
             st.subheader(f"{verdict} ({score})")
 
-            # heatmap
             heat, overlay = gradcam_like(img)
 
-            st.markdown("### 🔥 AI Heatmap")
             col1, col2 = st.columns(2)
             col1.image(heat)
             col2.image(overlay)
 
-            # explanation
             with st.expander("🧠 Explanation"):
-                st.write("Analyzing texture, noise, and gradient inconsistencies.")
+                st.write("Analyzing texture, noise, and edge consistency.")
 
             st.code(f"Verification ID: {str(uuid.uuid4())[:8]}")
 
@@ -233,4 +232,4 @@ elif mode == "Dashboard":
 
 # ─── FOOTER ───
 st.markdown("---")
-st.caption("🚀 DeepTrust AI | Final Hackathon Build")
+st.caption("🚀 DeepTrust AI | Final Version")
