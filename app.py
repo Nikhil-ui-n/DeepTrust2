@@ -92,19 +92,30 @@ class Detector:
     def analyze(self, img):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
+        # 🔥 Normalize lighting (important)
+        gray = cv2.equalizeHist(gray)
+
         # Features
         texture = cv2.Laplacian(gray, cv2.CV_64F).var()
         noise = np.std(gray)
         edges = np.mean(cv2.Canny(gray,100,200))
 
-        # ✅ Proper normalization (FIXED)
-        texture_score = min(texture / 150, 1)
-        noise_score = min(noise / 70, 1)
-        edge_score = min(edges / 100, 1)
+        # Normalize features
+        texture_score = min(texture / 180, 1)
+        noise_score = min(noise / 80, 1)
+        edge_score = min(edges / 120, 1)
 
-        score = (texture_score * 0.4 +
-                 noise_score * 0.3 +
-                 edge_score * 0.3)
+        # Irregularity
+        irregularity = (texture_score * 0.4 +
+                        noise_score * 0.3 +
+                        edge_score * 0.3)
+
+        # Invert → authenticity
+        score = (1 - irregularity)
+
+        # Mid-zone smoothing
+        if 0.4 < score < 0.6:
+            score = (score + 0.5) / 2
 
         score = int(score * 100)
 
@@ -114,15 +125,15 @@ class Detector:
         )
         faces = face.detectMultiScale(gray, 1.3, 5)
 
-        # ✅ Smart correction
+        # Smart correction
         if len(faces) == 0:
-            score = 75
+            score = max(score, 70)
         else:
             score += 5
 
         score = max(0, min(score, 100))
 
-        # ✅ Better thresholds
+        # Verdict
         if score >= 70:
             verdict = "Likely Real ✅"
         elif score >= 50:
@@ -180,7 +191,7 @@ if mode == "Upload":
             col2.image(overlay)
 
             with st.expander("🧠 Explanation"):
-                st.write("Analyzing texture, noise, and edge consistency.")
+                st.write("Analyzing texture, noise, lighting normalization, and gradients.")
 
             st.code(f"Verification ID: {str(uuid.uuid4())[:8]}")
 
@@ -232,4 +243,4 @@ elif mode == "Dashboard":
 
 # ─── FOOTER ───
 st.markdown("---")
-st.caption("🚀 DeepTrust AI | Final Version")
+st.caption("🚀 DeepTrust AI | Final Tuned Version")
